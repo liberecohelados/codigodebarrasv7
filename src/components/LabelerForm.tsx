@@ -12,6 +12,7 @@ import { buildCodigo21 } from '../utils/formatters';
 import Button from './ui/Button';
 import Dropdown from './ui/Dropdown';
 import Toast from './ui/Toast';
+import Modal from './ui/Modal';
 
 interface Product {
   id: string;
@@ -29,6 +30,7 @@ interface Marca {
 }
 
 const LabelerForm: React.FC = () => {
+  /* ---------- state ---------- */
   const [productos, setProductos] = useState<Product[]>([]);
   const [marcas, setMarcas] = useState<Marca[]>([]);
   const [contador, setContador] =
@@ -48,6 +50,8 @@ const LabelerForm: React.FC = () => {
     message: '',
   });
 
+  const [printerMissing, setPrinterMissing] = useState(false);
+
   /* ---------- carga inicial ---------- */
   useEffect(() => {
     (async () => {
@@ -59,7 +63,11 @@ const LabelerForm: React.FC = () => {
       const hoy = new Date().toISOString().slice(0, 10);
       const vto = new Date();
       vto.setFullYear(vto.getFullYear() + 2);
-      setForm(f => ({ ...f, fechaFab: hoy, fechaVto: vto.toISOString().slice(0, 10) }));
+      setForm(f => ({
+        ...f,
+        fechaFab: hoy,
+        fechaVto: vto.toISOString().slice(0, 10),
+      }));
     })();
   }, []);
 
@@ -124,7 +132,7 @@ const LabelerForm: React.FC = () => {
       `^FO20,20^A0N,60,60^FD${prod.label.toUpperCase()}^FS`,
       '^FO20,100^GB760,40,40^FS',
       `^FO40,110^A0N,40,40^FD${mkt.label}^FS`,
-      `^FO20,160^A0N,28,28^FD${prod.ingredientes.replace(/\\./g, '').slice(0,112)}^FS`,
+      `^FO20,160^A0N,28,28^FD${prod.ingredientes.replace(/\./g, '').slice(0,112)}^FS`,
       `^FO20,220^A0N,28,28^FDRNE ${prod.rne}  RNPA ${prod.rnpa}^FS`,
       `^FO20,260^A0N,28,28^FDF. ELAB: ${form.fechaFab}^FS`,
       `^FO400,260^A0N,28,28^FDF. VTO: ${form.fechaVto}^FS`,
@@ -139,14 +147,14 @@ const LabelerForm: React.FC = () => {
     await postImpresion({
       id_lata      : idLata,
       lote         : loteNum,
-      marcaLabel   : mkt.label,
-      productoLabel: prod.label,
-      peso         : form.peso,
+      marca        : mkt.label,
+      producto     : prod.label,
+      peso_g       : form.peso,
       rne          : prod.rne,
       rnpa         : prod.rnpa,
       codigo21     : codigo21,
-      fechaFab     : form.fechaFab,
-      fechaVto     : form.fechaVto,
+      fecha_fab    : form.fechaFab,
+      fecha_vto    : form.fechaVto,
     });
 
     /* ---------- actualizar contador ---------- */
@@ -154,9 +162,16 @@ const LabelerForm: React.FC = () => {
     setContador({ id: contador.id, nextId: idLata + 1 });
 
     /* ---------- imprimir ---------- */
-    (window as any).BrowserPrint.getDefaultDevice('printer', (p: any) => p.send(zpl));
+    if ((window as any).BrowserPrint) {
+      (window as any).BrowserPrint.getDefaultDevice('printer', (p: any) => {
+        if (p) p.send(zpl);
+        else setPrinterMissing(true);
+      });
+    } else {
+      setPrinterMissing(true);
+    }
 
-    setToast({ visible: true, message: 'Etiqueta impresa con éxito!' });
+    setToast({ visible: true, message: 'Etiqueta impresa y guardada!' });
     setTimeout(() => setToast({ visible: false, message: '' }), 3000);
 
     if (!window.confirm('¿Mismo artículo?')) window.location.reload();
@@ -167,6 +182,7 @@ const LabelerForm: React.FC = () => {
   return (
     <>
       <div className="space-y-4">
+        {/* Marca */}
         <label className="block text-sm font-medium mb-1">Seleccione Marca</label>
         <Dropdown
           options={marcas.map(m => ({ value: m.id, label: m.label }))}
@@ -174,6 +190,7 @@ const LabelerForm: React.FC = () => {
           onChange={val => setForm(f => ({ ...f, marcaId: val, productoId: '' }))}
         />
 
+        {/* Producto */}
         <label className="block text-sm font-medium mb-1">Seleccione Producto</label>
         <Dropdown
           options={productos
@@ -184,6 +201,7 @@ const LabelerForm: React.FC = () => {
           disabled={!form.marcaId}
         />
 
+        {/* Lote */}
         <div>
           <label className="block text-sm font-medium mb-1">Lote (5 dígitos)</label>
           <input
@@ -205,6 +223,7 @@ const LabelerForm: React.FC = () => {
           />
         </div>
 
+        {/* Fechas */}
         <div className="grid grid-cols-2 gap-4">
           <input
             type="date"
@@ -222,6 +241,7 @@ const LabelerForm: React.FC = () => {
           />
         </div>
 
+        {/* Báscula */}
         <div>
           <Button onClick={handleConnectScale}>Conectar Báscula</Button>
           <Button onClick={handleConnectBT} className="ml-2">
@@ -242,6 +262,13 @@ const LabelerForm: React.FC = () => {
       </div>
 
       <Toast visible={toast.visible} message={toast.message} />
+      {/* Modal si falta BrowserPrint */}
+      <Modal
+        open={printerMissing}
+        title="Impresora no encontrada"
+        message={`No se detectó el componente “BrowserPrint” o ninguna impresora Zebra.\n1. Instala la utilidad Zebra Browser Print (Windows/macOS).\n2. Asegúrate de que la etiqueta “BrowserPrint-3.1.250.min.js” esté cargada en /public.\n3. Refresca la página y vuelve a intentar.`}
+        onClose={() => setPrinterMissing(false)}
+      />
     </>
   );
 };
