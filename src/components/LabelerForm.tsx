@@ -1,3 +1,4 @@
+/*  src/components/LabelerForm.tsx  */
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -18,17 +19,17 @@ import ScaleStatus   from './ui/ScaleStatus';
 
 /* ---------- tipos ---------- */
 interface Product {
-  id: string;
-  label: string;
-  codigo: string;
+  id          : string;
+  label       : string;
+  codigo      : string;
   ingredientes: string;
-  marcasIds: string[];
-  rne: string;
-  rnpa: string;
+  marcasIds   : string[];
+  rne         : string;
+  rnpa        : string;
 }
 interface Marca {
-  id: string;
-  label: string;
+  id       : string;
+  label    : string;
   indicador: number;
 }
 
@@ -40,14 +41,14 @@ const LabelerForm: React.FC = () => {
 
   const [form, setForm] = useState({
     productoId: '',
-    marcaId: '',
-    lote: '',
-    fechaFab: '',
-    fechaVto: '',
-    peso: 0,
+    marcaId   : '',
+    lote      : '',
+    fechaFab  : '',
+    fechaVto  : '',
+    peso      : 0,
   });
 
-  const [toast,          setToast]          = useState<{ visible: boolean; message: string }>({ visible: false, message: '' });
+  const [toast,          setToast]          = useState({ visible:false, message:'' });
   const [printerOk,      setPrinterOk]      = useState(false);
   const [scaleOk,        setScaleOk]        = useState(false);
   const [printerMissing, setPrinterMissing] = useState(false);
@@ -60,8 +61,7 @@ const LabelerForm: React.FC = () => {
       setMarcas(await getMarcas());
 
       const hoy = new Date();
-      const vto = new Date();
-      vto.setFullYear(vto.getFullYear() + 2);
+      const vto = new Date(); vto.setFullYear(vto.getFullYear() + 2);
 
       setForm(f => ({
         ...f,
@@ -137,7 +137,7 @@ const LabelerForm: React.FC = () => {
       `^FO20,20^A0N,60,60^FD${prod.label.toUpperCase()}^FS`,
       '^FO20,100^GB760,40,40^FS',
       `^FO40,110^A0N,40,40^FD${mkt.label}^FS`,
-      `^FO20,160^A0N,28,28^FD${prod.ingredientes.replace(/\./g, '').slice(0, 112)}^FS`,
+      `^FO20,160^A0N,28,28^FD${prod.ingredientes.replace(/\./g,'').slice(0,112)}^FS`,
       `^FO20,220^A0N,28,28^FDRNE ${prod.rne}  RNPA ${prod.rnpa}^FS`,
       `^FO20,260^A0N,28,28^FDF. ELAB: ${form.fechaFab}^FS`,
       `^FO400,260^A0N,28,28^FDF. VTO: ${form.fechaVto}^FS`,
@@ -279,6 +279,7 @@ const LabelerForm: React.FC = () => {
       </div>
 
       <Toast visible={toast.visible} message={toast.message} />
+
       {/* Modal si falta BrowserPrint */}
       <Modal
         open={printerMissing}
