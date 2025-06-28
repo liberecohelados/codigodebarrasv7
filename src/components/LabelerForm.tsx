@@ -9,10 +9,10 @@ import {
   loteYaExiste,
 } from '../services/airtable';
 import { buildCodigo21 } from '../utils/formatters';
-import Button from './ui/Button';
-import Dropdown from './ui/Dropdown';
-import Toast from './ui/Toast';
-import Modal from './ui/Modal';
+import Button    from './ui/Button';
+import Dropdown  from './ui/Dropdown';
+import Toast     from './ui/Toast';
+import Modal     from './ui/Modal';
 
 interface Product {
   id: string;
@@ -32,49 +32,42 @@ interface Marca {
 const LabelerForm: React.FC = () => {
   /* ---------- state ---------- */
   const [productos, setProductos] = useState<Product[]>([]);
-  const [marcas, setMarcas] = useState<Marca[]>([]);
-  const [contador, setContador] =
-    useState<{ id: string; nextId: number } | null>(null);
+  const [marcas, setMarcas]       = useState<Marca[]>([]);
+  const [contador, setContador]   = useState<{ id: string; nextId: number } | null>(null);
 
   const [form, setForm] = useState({
-    productoId: '',
-    marcaId: '',
-    lote: '',
-    fechaFab: '',
-    fechaVto: '',
-    peso: 0,
+    productoId : '',
+    marcaId    : '',
+    lote       : '',
+    fechaFab   : '',
+    fechaVto   : '',
+    peso       : 0,
   });
 
-  const [toast, setToast] = useState<{ visible: boolean; message: string }>({
-    visible: false,
-    message: '',
-  });
-
-  const [printerMissing, setPrinterMissing] = useState(false);
+  const [toast,  setToast]         = useState({ visible: false, message: '' });
+  const [missingPrinter, setMissingPrinter] = useState(false);
 
   /* ---------- carga inicial ---------- */
   useEffect(() => {
     (async () => {
-      const cnt = await getContador();
-      setContador(cnt);
+      setContador(await getContador());
       setProductos(await getProductos());
-      setMarcas(await getMarcas());
+      setMarcas   (await getMarcas());
 
-      const hoy = new Date().toISOString().slice(0, 10);
+      const hoy = new Date();
       const vto = new Date();
       vto.setFullYear(vto.getFullYear() + 2);
+
       setForm(f => ({
         ...f,
-        fechaFab: hoy,
+        fechaFab: hoy.toISOString().slice(0, 10),
         fechaVto: vto.toISOString().slice(0, 10),
       }));
     })();
   }, []);
 
   /* ---------- handlers ---------- */
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
-  ) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setForm(f => ({ ...f, [name]: name === 'peso' ? Number(value) : value }));
   };
@@ -103,7 +96,7 @@ const LabelerForm: React.FC = () => {
   };
 
   const handlePrint = async () => {
-    /* --- validación de lote --- */
+    /* --- lote único --- */
     const loteNum = Number(form.lote);
     if (await loteYaExiste(loteNum)) {
       alert(`El lote ${loteNum} ya existe.`);
@@ -115,16 +108,16 @@ const LabelerForm: React.FC = () => {
     const mkt  = marcas.find(m => m.id === form.marcaId);
     if (!prod || !mkt) return alert('Seleccione producto y marca');
 
-    const idLata  = contador.nextId;
+    const idLata   = contador.nextId;
     const codigo21 = buildCodigo21({
       idLata,
-      lote: form.lote,
-      indicador: mkt.indicador,
+      lote          : form.lote,
+      indicador     : mkt.indicador,
       codigoProducto: prod.codigo,
-      pesoGramos: form.peso,
+      pesoGramos    : form.peso,
     });
 
-    /* ---------- ZPL 100×60 mm ---------- */
+    /* ---------- ZPL ---------- */
     const zpl = [
       '^XA^CI28',
       '^PW800',
@@ -132,7 +125,7 @@ const LabelerForm: React.FC = () => {
       `^FO20,20^A0N,60,60^FD${prod.label.toUpperCase()}^FS`,
       '^FO20,100^GB760,40,40^FS',
       `^FO40,110^A0N,40,40^FD${mkt.label}^FS`,
-      `^FO20,160^A0N,28,28^FD${prod.ingredientes.replace(/\./g, '').slice(0,112)}^FS`,
+      `^FO20,160^A0N,28,28^FD${prod.ingredientes.replace(/\\./g, '').slice(0,112)}^FS`,
       `^FO20,220^A0N,28,28^FDRNE ${prod.rne}  RNPA ${prod.rnpa}^FS`,
       `^FO20,260^A0N,28,28^FDF. ELAB: ${form.fechaFab}^FS`,
       `^FO400,260^A0N,28,28^FDF. VTO: ${form.fechaVto}^FS`,
@@ -143,32 +136,32 @@ const LabelerForm: React.FC = () => {
       '^XZ',
     ].join('\n');
 
-    /* ---------- guardar en Airtable ---------- */
+    /* ---------- Airtable ---------- */
     await postImpresion({
-      id_lata      : idLata,
-      lote         : loteNum,
-      marca        : mkt.label,
-      producto     : prod.label,
-      peso_g       : form.peso,
-      rne          : prod.rne,
-      rnpa         : prod.rnpa,
-      codigo21     : codigo21,
-      fecha_fab    : form.fechaFab,
-      fecha_vto    : form.fechaVto,
+      id_lata  : idLata,
+      lote     : loteNum,
+      marca    : mkt.label,
+      producto : prod.label,
+      peso_g   : form.peso,
+      rne      : prod.rne,
+      rnpa     : prod.rnpa,
+      codigo21,
+      fecha_fab: form.fechaFab,
+      fecha_vto: form.fechaVto,
     });
 
-    /* ---------- actualizar contador ---------- */
+    /* contador +1 */
     await patchContador(contador.id, idLata + 1);
     setContador({ id: contador.id, nextId: idLata + 1 });
 
-    /* ---------- imprimir ---------- */
-    if ((window as any).BrowserPrint) {
+    /* impresión */
+    if ((window as any).BrowserPrint && (window as any).Zebra?.Printer) {
       (window as any).BrowserPrint.getDefaultDevice('printer', (p: any) => {
         if (p) p.send(zpl);
-        else setPrinterMissing(true);
+        else   setMissingPrinter(true);
       });
     } else {
-      setPrinterMissing(true);
+      setMissingPrinter(true);
     }
 
     setToast({ visible: true, message: 'Etiqueta impresa y guardada!' });
@@ -244,9 +237,7 @@ const LabelerForm: React.FC = () => {
         {/* Báscula */}
         <div>
           <Button onClick={handleConnectScale}>Conectar Báscula</Button>
-          <Button onClick={handleConnectBT} className="ml-2">
-            Báscula BT
-          </Button>
+          <Button onClick={handleConnectBT} className="ml-2">Báscula BT</Button>
           <motion.span
             key={form.peso}
             initial={{ scale: 0.8, opacity: 0 }}
@@ -262,12 +253,13 @@ const LabelerForm: React.FC = () => {
       </div>
 
       <Toast visible={toast.visible} message={toast.message} />
-      {/* Modal si falta BrowserPrint */}
+
+      {/* Modal si falta BrowserPrint/impresora */}
       <Modal
-        open={printerMissing}
+        open={missingPrinter}
         title="Impresora no encontrada"
-        message={`No se detectó el componente “BrowserPrint” o ninguna impresora Zebra.\n1. Instala la utilidad Zebra Browser Print (Windows/macOS).\n2. Asegúrate de que la etiqueta “BrowserPrint-3.1.250.min.js” esté cargada en /public.\n3. Refresca la página y vuelve a intentar.`}
-        onClose={() => setPrinterMissing(false)}
+        message={`No se detectó la impresora de Etiquetas Conectada.\n\n• Revisar que el Cable este Correctamente conectado.\n• Si el error persiste, Reiniciar la computadora .\n• Y si todo falla, llamar a Santi.`}
+        onClose={() => setMissingPrinter(false)}
       />
     </>
   );
