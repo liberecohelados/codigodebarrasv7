@@ -1,5 +1,5 @@
 import React from 'react';
-import InfoIcon from './InfoIcon';
+import { Info } from 'lucide-react';
 
 interface Props {
   online : boolean;
@@ -16,7 +16,7 @@ const PrinterStatus: React.FC<Props> = ({ online, onRetry }) => (
       className={`block w-3 h-3 rounded-full border-2 border-white shadow-md
         ${online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}
     />
-    <InfoIcon className="w-4 h-4 text-neutral-500" />
+    <Info className="w-4 h-4 text-neutral-500" />
   </div>
 );
 
