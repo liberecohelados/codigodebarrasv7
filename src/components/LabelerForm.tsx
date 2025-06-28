@@ -29,7 +29,6 @@ interface Marca {
 }
 
 const LabelerForm: React.FC = () => {
-  /* ---------- state ---------- */
   const [productos, setProductos] = useState<Product[]>([]);
   const [marcas, setMarcas] = useState<Marca[]>([]);
   const [contador, setContador] =
@@ -100,11 +99,6 @@ const LabelerForm: React.FC = () => {
     const loteNum = Number(form.lote);
     if (await loteYaExiste(loteNum)) {
       alert(`El lote ${loteNum} ya existe.`);
-      return;
-    }
-    /* opcional: bloquear peso 0 g */
-    if (form.peso <= 0) {
-      alert('El peso no puede ser 0 g');
       return;
     }
 
