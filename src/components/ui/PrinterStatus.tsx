@@ -1,19 +1,23 @@
 import React from 'react';
+import { Info } from 'lucide-react';          // iconito
 
 interface Props {
-  online: boolean;
+  online : boolean;
   onRetry: () => void;
 }
 
 const PrinterStatus: React.FC<Props> = ({ online, onRetry }) => (
-  <button
+  <div
     onClick={onRetry}
-    className={`fixed bottom-6 right-6 px-4 py-2 rounded-full shadow-lg shadow-neutral-300/60
-      text-white font-medium transition-colors
-      ${online ? 'bg-emerald-500 hover:bg-emerald-600' : 'bg-red-500 hover:bg-red-600'}`}
+    title={online ? 'Impresora conectada' : 'Impresora no detectada. Click para reintentar'}
+    className="fixed bottom-6 right-6 z-50 flex items-center gap-1 cursor-pointer select-none"
   >
-    {online ? 'Impresora OK' : 'Sin impresora'}
-  </button>
+    <span
+      className={`block w-3 h-3 rounded-full border-2 border-white shadow-md
+        ${online ? 'bg-emerald-500 animate-pulse' : 'bg-red-500'}`}
+    />
+    <Info className="w-4 h-4 text-neutral-500" />
+  </div>
 );
 
 export default PrinterStatus;
