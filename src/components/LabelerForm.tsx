@@ -60,11 +60,7 @@ const LabelerForm: React.FC = () => {
       const hoy = new Date().toISOString().slice(0, 10);
       const vto = new Date();
       vto.setFullYear(vto.getFullYear() + 2);
-      setForm(f => ({
-        ...f,
-        fechaFab: hoy,
-        fechaVto: vto.toISOString().slice(0, 10),
-      }));
+      setForm(f => ({ ...f, fechaFab: hoy, fechaVto: vto.toISOString().slice(0, 10) }));
     })();
   }, []);
 
@@ -94,8 +90,7 @@ const LabelerForm: React.FC = () => {
     try {
       await (navigator as any).bluetooth.requestDevice({ acceptAllDevices: true });
       alert('Conectado a báscula BT (demo)');
-    } catch (e) {
-      console.error(e);
+    } catch {
       alert('Error Bluetooth');
     }
   };
@@ -107,15 +102,18 @@ const LabelerForm: React.FC = () => {
       alert(`El lote ${loteNum} ya existe.`);
       return;
     }
+    /* opcional: bloquear peso 0 g */
+    if (form.peso <= 0) {
+      alert('El peso no puede ser 0 g');
+      return;
+    }
 
     if (!contador) return;
     const prod = productos.find(p => p.id === form.productoId);
-    const mkt = marcas.find(m => m.id === form.marcaId);
+    const mkt  = marcas.find(m => m.id === form.marcaId);
     if (!prod || !mkt) return alert('Seleccione producto y marca');
 
-    const idLata = contador.nextId;
-
-    /* código 21 dígitos */
+    const idLata  = contador.nextId;
     const codigo21 = buildCodigo21({
       idLata,
       lote: form.lote,
@@ -124,60 +122,49 @@ const LabelerForm: React.FC = () => {
       pesoGramos: form.peso,
     });
 
-    /* ---------- ZPL definitivo (203 dpi) ---------- */
+    /* ---------- ZPL 100×60 mm ---------- */
     const zpl = [
       '^XA^CI28',
-      '^PW800', // ancho 100 mm
-      '^LL480', // alto  60 mm
-      /* nombre de producto */
+      '^PW800',
+      '^LL480',
       `^FO20,20^A0N,60,60^FD${prod.label.toUpperCase()}^FS`,
-      /* barra de marca */
       '^FO20,100^GB760,40,40^FS',
       `^FO40,110^A0N,40,40^FD${mkt.label}^FS`,
-      /* ingredientes (máx 2-3 líneas) */
-      `^FO20,160^A0N,28,28^FD${prod.ingredientes
-        .replace(/\\./g, '')
-        .slice(0, 112)}^FS`,
-      /* RNE / RNPA */
+      `^FO20,160^A0N,28,28^FD${prod.ingredientes.replace(/\\./g, '').slice(0,112)}^FS`,
       `^FO20,220^A0N,28,28^FDRNE ${prod.rne}  RNPA ${prod.rnpa}^FS`,
-      /* fechas */
       `^FO20,260^A0N,28,28^FDF. ELAB: ${form.fechaFab}^FS`,
       `^FO400,260^A0N,28,28^FDF. VTO: ${form.fechaVto}^FS`,
-      /* lote */
       `^FO20,300^A0N,28,28^FDLOTE: ${form.lote}^FS`,
-      /* línea divisoria opcional */
       '^FO20,330^GB760,3,3^FS',
-      /* barcode 128 – 120 dots alto (≈16 mm) */
       '^FO20,340^BY3^BCN,120,Y,N,N^FD' + codigo21 + '^FS',
-      /* texto de barcode centrado debajo */
       `^FO20,465^A0N,28,28^FB760,1,0,C,0^FD${codigo21}^FS`,
       '^XZ',
     ].join('\n');
 
-    /* ---------- grabar en Airtable ---------- */
+    /* ---------- guardar en Airtable ---------- */
     await postImpresion({
-      id_lata: idLata,
-      lote: loteNum,
-      marcaId: form.marcaId,
-      productoId: form.productoId,
-      peso: form.peso,
-      rne: prod.rne,
-      rnpa: prod.rnpa,
-      codigo21,
+      id_lata      : idLata,
+      lote         : loteNum,
+      marcaLabel   : mkt.label,
+      productoLabel: prod.label,
+      peso         : form.peso,
+      rne          : prod.rne,
+      rnpa         : prod.rnpa,
+      codigo21     : codigo21,
+      fechaFab     : form.fechaFab,
+      fechaVto     : form.fechaVto,
     });
 
-    /* incrementar contador */
+    /* ---------- actualizar contador ---------- */
     await patchContador(contador.id, idLata + 1);
     setContador({ id: contador.id, nextId: idLata + 1 });
 
-    /* imprimir */
+    /* ---------- imprimir ---------- */
     (window as any).BrowserPrint.getDefaultDevice('printer', (p: any) => p.send(zpl));
 
-    /* feedback */
     setToast({ visible: true, message: 'Etiqueta impresa con éxito!' });
     setTimeout(() => setToast({ visible: false, message: '' }), 3000);
 
-    /* reset */
     if (!window.confirm('¿Mismo artículo?')) window.location.reload();
     else setForm(f => ({ ...f, peso: 0 }));
   };
@@ -186,7 +173,6 @@ const LabelerForm: React.FC = () => {
   return (
     <>
       <div className="space-y-4">
-        {/* Marca */}
         <label className="block text-sm font-medium mb-1">Seleccione Marca</label>
         <Dropdown
           options={marcas.map(m => ({ value: m.id, label: m.label }))}
@@ -194,7 +180,6 @@ const LabelerForm: React.FC = () => {
           onChange={val => setForm(f => ({ ...f, marcaId: val, productoId: '' }))}
         />
 
-        {/* Producto */}
         <label className="block text-sm font-medium mb-1">Seleccione Producto</label>
         <Dropdown
           options={productos
@@ -205,7 +190,6 @@ const LabelerForm: React.FC = () => {
           disabled={!form.marcaId}
         />
 
-        {/* Lote */}
         <div>
           <label className="block text-sm font-medium mb-1">Lote (5 dígitos)</label>
           <input
@@ -213,11 +197,11 @@ const LabelerForm: React.FC = () => {
             name="lote"
             value={form.lote}
             inputMode="numeric"
-            pattern="\\d{5}"
+            pattern="\d{5}"
             maxLength={5}
             placeholder="#####"
             onChange={e => {
-              const val = e.target.value.replace(/\\D/g, '').slice(0, 5);
+              const val = e.target.value.replace(/\D/g, '').slice(0, 5);
               setForm(f => ({ ...f, lote: val }));
             }}
             className={`mt-1 block w-full rounded-xl border px-3 py-2 ${
@@ -227,7 +211,6 @@ const LabelerForm: React.FC = () => {
           />
         </div>
 
-        {/* Fechas */}
         <div className="grid grid-cols-2 gap-4">
           <input
             type="date"
@@ -245,7 +228,6 @@ const LabelerForm: React.FC = () => {
           />
         </div>
 
-        {/* Báscula */}
         <div>
           <Button onClick={handleConnectScale}>Conectar Báscula</Button>
           <Button onClick={handleConnectBT} className="ml-2">
