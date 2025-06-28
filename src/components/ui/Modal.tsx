@@ -21,15 +21,19 @@ const Modal: React.FC<Props> = ({ open, title, message, onClose }) => (
       >
         <motion.div
           key="card"
-          initial={{ scale: .9, opacity: 0 }}
+          initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: .9, opacity: 0 }}
+          exit={{ scale: 0.9, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 260, damping: 20 }}
           className="w-full max-w-md bg-white rounded-2xl shadow-xl shadow-neutral-300/60 p-6"
           onClick={e => e.stopPropagation()}
         >
-          <h2 className="text-lg font-semibold mb-2 text-neutral-800">{title}</h2>
-          <p className="text-sm text-neutral-600 whitespace-pre-line">{message}</p>
+          <h2 className="text-lg font-semibold mb-2 text-neutral-800">
+            {title}
+          </h2>
+          <p className="text-sm text-neutral-600 whitespace-pre-line">
+            {message}
+          </p>
 
           <button
             onClick={onClose}
