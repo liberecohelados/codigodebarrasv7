@@ -1,42 +1,46 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import Button from './Button';
 
 interface Props {
-  open: boolean;
-  resumen: string;
-  onKeep: () => void;
-  onReset: () => void;
+  open      : boolean;
+  resumen   : string;       // texto que describe lo impreso
+  onKeep    : () => void;   // continuar con la misma config
+  onRestart : () => void;   // recargar todo
 }
 
-const ConfirmPrintModal: React.FC<Props> = ({ open, resumen, onKeep, onReset }) => (
+const ConfirmPrintModal: React.FC<Props> = ({
+  open, resumen, onKeep, onRestart,
+}) => (
   <AnimatePresence>
     {open && (
       <motion.div
         key="backdrop"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40 flex items-center justify-center p-4"
+        className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
       >
         <motion.div
           key="card"
-          initial={{ scale: 0.9, opacity: 0 }}
+          className="w-full max-w-md bg-white rounded-2xl shadow-xl shadow-neutral-300/60 p-6"
+          initial={{ scale: .9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          exit={{ scale: 0.9, opacity: 0 }}
+          exit={{ scale: .9, opacity: 0 }}
           transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-          className="w-full max-w-md bg-white rounded-2xl shadow-xl shadow-neutral-300/60 p-6 space-y-4"
         >
-          <h2 className="text-lg font-semibold text-neutral-800">
-            ¿Seguir imprimiendo?
+          <h2 className="text-lg font-semibold mb-2 text-neutral-800">
+            ¿Cómo seguimos?
           </h2>
 
-          <p className="text-sm whitespace-pre-line text-neutral-700">{resumen}</p>
+          <p className="text-sm text-neutral-600 whitespace-pre-line mb-6">
+            Ya se imprimió la etiqueta de:\n{resumen}
+          </p>
 
-          <div className="grid grid-cols-2 gap-3 pt-2">
-            <Button onClick={onKeep}  className="w-full">Mantener</Button>
-            <Button onClick={onReset} className="w-full bg-[#FF163B] hover:bg-[#e21334]">
-              Nueva config.
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Button onClick={onKeep} className="w-full bg-emerald-600 hover:bg-emerald-700">
+              Seguir con lo mismo
+            </Button>
+            <Button onClick={onRestart} className="w-full bg-[#FF163B] hover:bg-[#e21334]">
+              Cargar nuevo
             </Button>
           </div>
         </motion.div>
