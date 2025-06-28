@@ -6,7 +6,7 @@ import {
   getMarcas,
   postImpresion,
   patchContador,
-  loteYaExiste, // ← import
+  loteYaExiste,
 } from '../services/airtable';
 import { buildCodigo21 } from '../utils/formatters';
 import Button from './ui/Button';
@@ -29,6 +29,7 @@ interface Marca {
 }
 
 const LabelerForm: React.FC = () => {
+  /* ---------- state ---------- */
   const [productos, setProductos] = useState<Product[]>([]);
   const [marcas, setMarcas] = useState<Marca[]>([]);
   const [contador, setContador] =
@@ -48,7 +49,7 @@ const LabelerForm: React.FC = () => {
     message: '',
   });
 
-  /* ---------- Carga inicial ---------- */
+  /* ---------- carga inicial ---------- */
   useEffect(() => {
     (async () => {
       const cnt = await getContador();
@@ -59,11 +60,15 @@ const LabelerForm: React.FC = () => {
       const hoy = new Date().toISOString().slice(0, 10);
       const vto = new Date();
       vto.setFullYear(vto.getFullYear() + 2);
-      setForm(f => ({ ...f, fechaFab: hoy, fechaVto: vto.toISOString().slice(0, 10) }));
+      setForm(f => ({
+        ...f,
+        fechaFab: hoy,
+        fechaVto: vto.toISOString().slice(0, 10),
+      }));
     })();
   }, []);
 
-  /* ---------- Handlers ---------- */
+  /* ---------- handlers ---------- */
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
@@ -96,7 +101,7 @@ const LabelerForm: React.FC = () => {
   };
 
   const handlePrint = async () => {
-    /* --- Validar lote único --- */
+    /* --- validación de lote --- */
     const loteNum = Number(form.lote);
     if (await loteYaExiste(loteNum)) {
       alert(`El lote ${loteNum} ya existe.`);
@@ -109,6 +114,8 @@ const LabelerForm: React.FC = () => {
     if (!prod || !mkt) return alert('Seleccione producto y marca');
 
     const idLata = contador.nextId;
+
+    /* código 21 dígitos */
     const codigo21 = buildCodigo21({
       idLata,
       lote: form.lote,
@@ -117,24 +124,37 @@ const LabelerForm: React.FC = () => {
       pesoGramos: form.peso,
     });
 
-    /* ZPL 60×100 mm */
+    /* ---------- ZPL definitivo (203 dpi) ---------- */
     const zpl = [
       '^XA^CI28',
-      '^PW800',
-      '^LL480',
-      `^FO20,20^A0N,36,36^FD${prod.label.toUpperCase()}^FS`,
-      '^FO20,60^GB760,30,30^FS',
-      `^FO40,65^A0N,26,26^FD${mkt.label}^FS`,
-      `^FO20,110^A0N,18,18^FD${prod.ingredientes.replace(/\\./g, '').slice(0, 112)}^FS`,
-      `^FO20,160^A0N,18,18^FDRNE ${prod.rne}  RNPA ${prod.rnpa}^FS`,
-      `^FO20,190^A0N,18,18^FDF. ELAB: ${form.fechaFab}^FS`,
-      `^FO400,190^A0N,18,18^FDF. VTO: ${form.fechaVto}^FS`,
-      `^FO20,220^A0N,18,18^FDLOTE: ${form.lote}^FS`,
-      `^FO20,250^BY2^BCN,80,Y,N,N^FD${codigo21}^FS`,
+      '^PW800', // ancho 100 mm
+      '^LL480', // alto  60 mm
+      /* nombre de producto */
+      `^FO20,20^A0N,60,60^FD${prod.label.toUpperCase()}^FS`,
+      /* barra de marca */
+      '^FO20,100^GB760,40,40^FS',
+      `^FO40,110^A0N,40,40^FD${mkt.label}^FS`,
+      /* ingredientes (máx 2-3 líneas) */
+      `^FO20,160^A0N,28,28^FD${prod.ingredientes
+        .replace(/\\./g, '')
+        .slice(0, 112)}^FS`,
+      /* RNE / RNPA */
+      `^FO20,220^A0N,28,28^FDRNE ${prod.rne}  RNPA ${prod.rnpa}^FS`,
+      /* fechas */
+      `^FO20,260^A0N,28,28^FDF. ELAB: ${form.fechaFab}^FS`,
+      `^FO400,260^A0N,28,28^FDF. VTO: ${form.fechaVto}^FS`,
+      /* lote */
+      `^FO20,300^A0N,28,28^FDLOTE: ${form.lote}^FS`,
+      /* línea divisoria opcional */
+      '^FO20,330^GB760,3,3^FS',
+      /* barcode 128 – 120 dots alto (≈16 mm) */
+      '^FO20,340^BY3^BCN,120,Y,N,N^FD' + codigo21 + '^FS',
+      /* texto de barcode centrado debajo */
+      `^FO20,465^A0N,28,28^FB760,1,0,C,0^FD${codigo21}^FS`,
       '^XZ',
-    ].join('\\n');
+    ].join('\n');
 
-    /* Guardar en Airtable */
+    /* ---------- grabar en Airtable ---------- */
     await postImpresion({
       id_lata: idLata,
       lote: loteNum,
@@ -146,21 +166,23 @@ const LabelerForm: React.FC = () => {
       codigo21,
     });
 
-    /* Incrementar contador */
+    /* incrementar contador */
     await patchContador(contador.id, idLata + 1);
     setContador({ id: contador.id, nextId: idLata + 1 });
 
-    /* Imprimir */
+    /* imprimir */
     (window as any).BrowserPrint.getDefaultDevice('printer', (p: any) => p.send(zpl));
 
+    /* feedback */
     setToast({ visible: true, message: 'Etiqueta impresa con éxito!' });
     setTimeout(() => setToast({ visible: false, message: '' }), 3000);
 
+    /* reset */
     if (!window.confirm('¿Mismo artículo?')) window.location.reload();
     else setForm(f => ({ ...f, peso: 0 }));
   };
 
-  /* ---------- Render ---------- */
+  /* ---------- render ---------- */
   return (
     <>
       <div className="space-y-4">
@@ -191,11 +213,11 @@ const LabelerForm: React.FC = () => {
             name="lote"
             value={form.lote}
             inputMode="numeric"
-            pattern="\d{5}"
+            pattern="\\d{5}"
             maxLength={5}
             placeholder="#####"
             onChange={e => {
-              const val = e.target.value.replace(/\D/g, '').slice(0, 5);
+              const val = e.target.value.replace(/\\D/g, '').slice(0, 5);
               setForm(f => ({ ...f, lote: val }));
             }}
             className={`mt-1 block w-full rounded-xl border px-3 py-2 ${
