@@ -1,3 +1,4 @@
+// src/components/LabelerForm.tsx
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -23,9 +24,10 @@ interface Product {
   ingredientes:string; marcasIds:string[];
   rne:string; rnpa:string;
 }
-interface Marca   { id:string; label:string; indicador:number }
+interface Marca { id:string; label:string; indicador:number }
 
-/* -------------------------------------------------------------------- */
+const SECRET = 'modolocalactivado';
+
 const LabelerForm: React.FC = () => {
   /* ---------- state ---------- */
   const [productos, setProductos] = useState<Product[]>([]);
@@ -41,11 +43,27 @@ const LabelerForm: React.FC = () => {
   const [scaleOk,        setScaleOk]        = useState(false);
   const [printerMissing, setPrinterMissing] = useState(false);
 
-  /* modal de confirmación */
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [lastPrint,   setLastPrint]   = useState<{producto:string;marca:string;lote:string;fechaFab:string;fechaVto:string}>(
+  const [offlineMode, setOfflineMode]   = useState(false);
+  const [keyBuffer,   setKeyBuffer]     = useState('');
+  const [confirmOpen, setConfirmOpen]   = useState(false);
+  const [lastPrint,   setLastPrint]     = useState<{producto:string;marca:string;lote:string;fechaFab:string;fechaVto:string}>(
     { producto:'', marca:'', lote:'', fechaFab:'', fechaVto:'' }
   );
+
+  /* ---------- secret-key listener ---------- */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const kb = (keyBuffer + e.key).slice(-SECRET.length);
+      setKeyBuffer(kb);
+      if (kb === SECRET) {
+        setOfflineMode(m => !m);
+        setKeyBuffer('');
+        alert(`Modo ${offlineMode ? 'NORMAL' : 'OFFLINE'} ${offlineMode ? 'desactivado' : 'activado'}`);
+      }
+    };
+    window.addEventListener('keypress', onKey);
+    return () => window.removeEventListener('keypress', onKey);
+  }, [keyBuffer, offlineMode]);
 
   /* ---------- carga inicial ---------- */
   useEffect(() => {
@@ -64,11 +82,10 @@ const LabelerForm: React.FC = () => {
     })();
   }, []);
 
-  /* ---------- handlers ---------- */
   const handleChange = (e:React.ChangeEvent<HTMLInputElement|HTMLSelectElement>) =>
     setForm(f => ({ ...f, [e.target.name]: e.target.name==='peso' ? +e.target.value : e.target.value }));
 
-  /* Báscula (serial o BT) ------------------------------------------------ */
+  /* Báscula -------------------------------------------------------------- */
   const handleConnectScale = async () => {
     try{
       if (!('serial' in navigator)) throw new Error();
@@ -83,7 +100,6 @@ const LabelerForm: React.FC = () => {
       }
     }catch{ setScaleOk(false); alert('No se pudo conectar a la báscula'); }
   };
-
   const handleConnectBT = async () => {
     try{
       if (!('bluetooth' in navigator)) throw new Error();
@@ -95,22 +111,16 @@ const LabelerForm: React.FC = () => {
   /* --------------------------- IMPRESIÓN ------------------------------- */
   const handlePrint = async () => {
     if (!contador) return;
-
     const prod = productos.find(p=>p.id===form.productoId);
     const mkt  = marcas   .find(m=>m.id===form.marcaId);
     if (!prod||!mkt) return alert('Seleccione producto y marca');
 
-    /* código de barras 21 dígitos */
     const idLata   = contador.nextId;
     const codigo21 = buildCodigo21({
-      idLata,
-      lote:form.lote,
-      indicador:mkt.indicador,
-      codigoProducto:prod.codigo,
-      pesoGramos:form.peso,
+      idLata, lote:form.lote, indicador:mkt.indicador,
+      codigoProducto:prod.codigo, pesoGramos:form.peso,
     });
 
-    /* ---------- ZPL ---------- */
     const zpl = [
       '^XA^CI28','^PW800','^LL480',
       `^FO20,20^A0N,60,60^FD${prod.label.toUpperCase()}^FS`,
@@ -127,7 +137,7 @@ const LabelerForm: React.FC = () => {
       '^XZ',
     ].join('\n');
 
-    /* ---------- Airtable ---------- */
+    /* Airtable siempre, sea offline o normal */
     await postImpresion({
       id_lata   : idLata,
       lote      : +form.lote,
@@ -141,32 +151,43 @@ const LabelerForm: React.FC = () => {
       fecha_vto : form.fechaVto,
     });
 
-    /* ---------- contador ---------- */
     await patchContador(contador.id, idLata+1);
     setContador({ id:contador.id, nextId:idLata+1 });
 
-    /* ---------- imprimir ---------- */
-    if ((window as any).BrowserPrint){
+    /* Intento de impresión */
+    let attemptedPrint = false;
+    if (!offlineMode && (window as any).BrowserPrint) {
       (window as any).BrowserPrint.getDefaultDevice('printer',(p:any)=>{
         if (p){ setPrinterOk(true); p.send(zpl); }
         else  { setPrinterOk(false); setPrinterMissing(true); }
       });
-    }else{ setPrinterOk(false); setPrinterMissing(true); }
+      attemptedPrint = true;
+    } else if (!offlineMode) {
+      setPrinterOk(false);
+      setPrinterMissing(true);
+    }
 
-    /* toast + modal de confirmación */
-    setToast({visible:true, message:'Etiqueta impresa y guardada!'});
-    setTimeout(()=>setToast({visible:false,message:''}),3000);
+    setToast({ visible:true, message:'¡Datos guardados!'+(attemptedPrint?' Etiqueta enviada a impresora.':'') });
+    setTimeout(()=>setToast({ visible:false, message:'' }),3000);
 
-    setLastPrint({ producto:prod.label, marca:mkt.label, lote:form.lote, fechaFab:form.fechaFab, fechaVto:form.fechaVto });
+    setLastPrint({
+      producto:prod.label, marca:mkt.label,
+      lote:form.lote, fechaFab:form.fechaFab, fechaVto:form.fechaVto
+    });
     setConfirmOpen(true);
   };
 
   /* ---------- render ---------- */
   return (
     <>
-      {/* indicadores */}
+      {/* badges de estado */}
       <PrinterStatus online={printerOk} onRetry={()=>window.location.reload()}/>
       <ScaleStatus   online={scaleOk}   onRetry={handleConnectScale}/>
+      {offlineMode && (
+        <div className="fixed bottom-6 right-28 z-50 px-3 py-1 bg-[#FF163B] text-white rounded-full text-xs">
+          Modo sin impresora
+        </div>
+      )}
 
       <div className="space-y-4">
         {/* Marca */}
@@ -193,35 +214,32 @@ const LabelerForm: React.FC = () => {
           <label className="block text-sm font-medium mb-1">Lote (5 dígitos)</label>
           <input
             name="lote" inputMode="numeric" maxLength={5} pattern="\d{5}"
-            placeholder="#####"
-            value={form.lote}
-            onChange={e=>{
-              const val=e.target.value.replace(/\D/g,'').slice(0,5);
-              setForm(f=>({...f,lote:val}));
-            }}
+            placeholder="#####" value={form.lote}
+            onChange={e=>setForm(f=>({...f,lote:e.target.value.replace(/\D/g,'').slice(0,5)}))}
             className={`mt-1 block w-full rounded-xl border px-3 py-2 ${
               form.lote.length===5?'border-neutral-200':'border-red-500'
             } focus:border-brand focus:ring focus:ring-brand-light focus:ring-opacity-50`}
-            required
           />
         </div>
 
         {/* Fechas */}
         <div className="grid grid-cols-2 gap-4">
-          <input type="date" name="fechaFab" value={form.fechaFab} onChange={handleChange}
+          <input type="date"   name="fechaFab" value={form.fechaFab} onChange={handleChange}
             className="mt-1 block w-full rounded-xl border border-neutral-200 px-3 py-2"/>
-          <input type="date" name="fechaVto" value={form.fechaVto} onChange={handleChange}
+          <input type="date"   name="fechaVto" value={form.fechaVto} onChange={handleChange}
             className="mt-1 block w-full rounded-xl border border-neutral-200 px-3 py-2"/>
         </div>
 
-        {/* Báscula */}
+        {/* Conexión báscula */}
         <div className="flex gap-4 justify-center">
           <Button onClick={handleConnectScale}>Conectar Báscula</Button>
           <Button onClick={handleConnectBT}>Báscula BT</Button>
         </div>
 
         {/* Peso grande */}
-        <div className="text-center text-3xl font-semibold tracking-wide">{form.peso} g</div>
+        <div className="text-center text-3xl font-semibold tracking-wide">
+          {form.peso} g
+        </div>
 
         <Button onClick={handlePrint}>Imprimir</Button>
       </div>
@@ -230,16 +248,17 @@ const LabelerForm: React.FC = () => {
       <Modal
         open={printerMissing}
         title="Impresora no encontrada"
-        message={`No se detectó BrowserPrint ni impresora Zebra.\n`+
-                 `• Instalá Zebra Browser Print.\n• Refrescá la página e intentá de nuevo.`}
+        message={`No se detectó BrowserPrint ni impresora Zebra.\n• Instalá Zebra Browser Print.\n• Refrescá la página e intentá de nuevo.`}
         onClose={()=>setPrinterMissing(false)}
       />
+
       <ConfirmPrint
         open={confirmOpen}
+        offline={offlineMode}
         data={lastPrint}
         onKeep={()=>{
           setConfirmOpen(false);
-          setForm(f=>({...f,peso:0}));      // mantener config, reset sólo peso
+          setForm(f=>({...f,peso:0}));
         }}
         onReset={()=>window.location.reload()}
       />
