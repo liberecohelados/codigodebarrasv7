@@ -10,52 +10,68 @@ import {
 } from '../services/airtable';
 import { buildCodigo21 } from '../utils/formatters';
 
-import Button         from './ui/Button';
-import Dropdown       from './ui/Dropdown';
-import Toast          from './ui/Toast';
-import PrinterStatus  from './ui/PrinterStatus';
-import ScaleStatus    from './ui/ScaleStatus';
-import ConfirmPrint   from './ui/ConfirmPrintModal';
+import Button        from './ui/Button';
+import Dropdown      from './ui/Dropdown';
+import Toast         from './ui/Toast';
+import PrinterStatus from './ui/PrinterStatus';
+import ScaleStatus   from './ui/ScaleStatus';
+import ConfirmPrint  from './ui/ConfirmPrintModal';
 
 interface Product {
-  id: string; label: string; codigo: string;
-  ingredientes: string; marcasIds: string[];
-  rne: string; rnpa: string;
+  id: string;
+  label: string;
+  codigo: string;
+  ingredientes: string;
+  marcasIds: string[];
+  rne: string;
+  rnpa: string;
 }
 interface Marca {
-  id: string; label: string; indicador: number;
+  id: string;
+  label: string;
+  indicador: number;
 }
 
 const SECRET = 'modolocalactivado';
 
 export default function LabelerForm() {
-  /* States generales */
+  /* ---------- state ---------- */
   const [productos, setProductos] = useState<Product[]>([]);
-  const [marcas, setMarcas]       = useState<Marca[]>([]);
-  const [contador, setContador]   = useState<{id:string; nextId:number} | null>(null);
+  const [marcas,    setMarcas]    = useState<Marca[]>([]);
+  const [contador,  setContador]  = useState<{ id: string; nextId: number } | null>(null);
 
   const [form, setForm] = useState({
-    productoId: '', marcaId: '', lote: '', fechaFab: '', fechaVto: '', peso: 0,
+    productoId: '',
+    marcaId: '',
+    lote: '',
+    fechaFab: '',
+    fechaVto: '',
+    peso: 0,
   });
-  const [toast, setToast]           = useState({ visible: false, message: '' });
-  const [printerOk, setPrinterOk]   = useState(false);
-  const [scaleOk, setScaleOk]       = useState(false);
-  const [offlineMode, setOfflineMode]= useState(false);
 
-  /* Modales */
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toast,         setToast]         = useState({ visible: false, message: '' });
+  const [printerOk,     setPrinterOk]     = useState(false);
+  const [scaleOk,       setScaleOk]       = useState(false);
+  const [offlineMode,   setOfflineMode]   = useState(false);
+
+  /* modales + último print */
   const [noPrinterOpen, setNoPrinterOpen] = useState(false);
-  const [lastPrint, setLastPrint] = useState<{
-    producto:string; marca:string; lote:string; fechaFab:string; fechaVto:string;
-  }>({ producto:'', marca:'', lote:'', fechaFab:'', fechaVto:'' });
+  const [confirmOpen,   setConfirmOpen]   = useState(false);
+  const [lastPrint,     setLastPrint]     = useState<{
+    producto: string;
+    marca: string;
+    lote: string;
+    fechaFab: string;
+    fechaVto: string;
+  }>({ producto: '', marca: '', lote: '', fechaFab: '', fechaVto: '' });
 
-  /* Secret key listener para modo emergencia */
+  /* secret-key listener para modo emergencia */
   const [keyBuffer, setKeyBuffer] = useState('');
   useEffect(() => {
-    const onKey = (e:KeyboardEvent) => {
-      const kb = (keyBuffer + e.key).slice(-SECRET.length);
-      setKeyBuffer(kb);
-      if (kb === SECRET) {
+    const onKey = (e: KeyboardEvent) => {
+      const buf = (keyBuffer + e.key).slice(-SECRET.length);
+      setKeyBuffer(buf);
+      if (buf === SECRET) {
         setOfflineMode(m => !m);
         setKeyBuffer('');
         alert(`Modo ${offlineMode ? 'NORMAL' : 'OFFLINE'} ${offlineMode ? 'desactivado' : 'activado'}`);
@@ -65,38 +81,42 @@ export default function LabelerForm() {
     return () => window.removeEventListener('keypress', onKey);
   }, [keyBuffer, offlineMode]);
 
-  /* Carga inicial de datos */
+  /* carga inicial */
   useEffect(() => {
     (async () => {
       setContador(await getContador());
       setProductos(await getProductos());
       setMarcas(await getMarcas());
       const hoy = new Date();
-      const vto = new Date(); vto.setFullYear(vto.getFullYear()+2);
+      const vto = new Date();
+      vto.setFullYear(vto.getFullYear() + 2);
       setForm(f => ({
         ...f,
-        fechaFab: hoy.toISOString().slice(0,10),
-        fechaVto: vto.toISOString().slice(0,10),
+        fechaFab: hoy.toISOString().slice(0, 10),
+        fechaVto: vto.toISOString().slice(0, 10),
       }));
     })();
   }, []);
 
-  /* Handlers básicos */
-  const handleChange = (e:React.ChangeEvent<any>) =>
-    setForm(f => ({ ...f, [e.target.name]: e.target.name==='peso' ? +e.target.value : e.target.value }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setForm(f => ({
+      ...f,
+      [e.target.name]: e.target.name === 'peso' ? +e.target.value : e.target.value,
+    }));
 
-  /* Conexión báscula */
+  /* báscula */
   const handleConnectScale = async () => {
     try {
       if (!('serial' in navigator)) throw new Error();
       const port = await (navigator as any).serial.requestPort();
-      await port.open({ baudRate:9600 });
+      await port.open({ baudRate: 9600 });
       const rdr = port.readable.pipeThrough(new TextDecoderStream()).getReader();
       setScaleOk(true);
       while (true) {
-        const { value, done } = await rdr.read(); if (done) break;
+        const { value, done } = await rdr.read();
+        if (done) break;
         const m = /([\d.]+)/.exec(value);
-        if (m) setForm(f => ({ ...f, peso: Math.round(parseFloat(m[1])*1000) }));
+        if (m) setForm(f => ({ ...f, peso: Math.round(parseFloat(m[1]) * 1000) }));
       }
     } catch {
       setScaleOk(false);
@@ -106,7 +126,7 @@ export default function LabelerForm() {
   const handleConnectBT = async () => {
     try {
       if (!('bluetooth' in navigator)) throw new Error();
-      await (navigator as any).bluetooth.requestDevice({ acceptAllDevices:true });
+      await (navigator as any).bluetooth.requestDevice({ acceptAllDevices: true });
       setScaleOk(true);
     } catch {
       setScaleOk(false);
@@ -114,14 +134,14 @@ export default function LabelerForm() {
     }
   };
 
-  /* FLOW de impresión */
+  /* impresión */
   const handlePrint = async () => {
     if (!contador) return;
-    const prod = productos.find(p=>p.id===form.productoId);
-    const mkt  = marcas.find(m=>m.id===form.marcaId);
-    if (!prod||!mkt) return alert('Seleccione producto y marca');
+    const prod = productos.find(p => p.id === form.productoId);
+    const mkt  = marcas.find(m => m.id === form.marcaId);
+    if (!prod || !mkt) return alert('Seleccione producto y marca');
 
-    // Si no hay impresora y no estamos ya en offline, mostramos aviso y NO posteamos
+    // 1) Si no hay printer y NO estamos en offline → modal de aviso
     if (!offlineMode && !(window as any).BrowserPrint) {
       setLastPrint({
         producto: prod.label,
@@ -134,11 +154,14 @@ export default function LabelerForm() {
       return;
     }
 
-    // Generar código
+    // 2) Generar ZPL y POST a Airtable siempre
     const idLata   = contador.nextId;
     const codigo21 = buildCodigo21({
-      idLata, lote:form.lote, indicador:mkt.indicador,
-      codigoProducto:prod.codigo, pesoGramos:form.peso,
+      idLata,
+      lote: form.lote,
+      indicador: mkt.indicador,
+      codigoProducto: prod.codigo,
+      pesoGramos: form.peso,
     });
     const zpl = [
       '^XA^CI28','^PW800','^LL480',
@@ -156,36 +179,34 @@ export default function LabelerForm() {
       '^XZ',
     ].join('\n');
 
-    // POST a Airtable siempre (offline o no)
     await postImpresion({
-      id_lata: idLata,
-      lote: +form.lote,
-      marca: mkt.label,
-      producto: prod.label,
-      peso_g: form.peso,
-      rne: prod.rne,
-      rnpa: prod.rnpa,
+      id_lata:   idLata,
+      lote:      +form.lote,
+      marca:     mkt.label,
+      producto:  prod.label,
+      peso_g:    form.peso,
+      rne:       prod.rne,
+      rnpa:      prod.rnpa,
       codigo21,
       fecha_fab: form.fechaFab,
       fecha_vto: form.fechaVto,
     });
-    await patchContador(contador.id, idLata+1);
-    setContador({ id: contador.id, nextId: idLata+1 });
+    await patchContador(contador.id, idLata + 1);
+    setContador({ id: contador.id, nextId: idLata + 1 });
 
-    // Impresión si no estamos en offline
+    // 3) Si no estamos en offline, mandamos a imprimir
     if (!offlineMode) {
-      (window as any).BrowserPrint.getDefaultDevice('printer',(p:any)=>{
+      (window as any).BrowserPrint.getDefaultDevice('printer', (p: any) => {
         if (p) {
           setPrinterOk(true);
           p.send(zpl);
         } else {
           setPrinterOk(false);
-          //   podríamos abrir again noPrinterOpen
         }
       });
     }
 
-    // Confirmación “Mantener / Nueva configuración”
+    // 4) Abrir modal de “mantener / nueva config”
     setLastPrint({
       producto: prod.label,
       marca: mkt.label,
@@ -198,9 +219,9 @@ export default function LabelerForm() {
 
   return (
     <>
-      {/* Badges */}
-      <PrinterStatus online={printerOk} onRetry={()=>window.location.reload()}/>
-      <ScaleStatus   online={scaleOk}   onRetry={handleConnectScale}/>
+      {/* Badges de estado */}
+      <PrinterStatus online={printerOk} onRetry={() => window.location.reload()} />
+      <ScaleStatus   online={scaleOk}   onRetry={handleConnectScale} />
       {offlineMode && (
         <div className="fixed bottom-6 right-28 z-50 px-3 py-1 bg-[#FF163B] text-white rounded-full text-xs">
           Modo sin impresora
@@ -208,23 +229,26 @@ export default function LabelerForm() {
       )}
 
       <div className="space-y-4">
+        {/* Marca */}
         <label className="block text-sm font-medium mb-1">Seleccione Marca</label>
         <Dropdown
-          options={marcas.map(m=>({value:m.id,label:m.label}))}
+          options={marcas.map(m => ({ value: m.id, label: m.label }))}
           value={form.marcaId}
-          onChange={val=>setForm(f=>({...f,marcaId:val,productoId:''}))}
+          onChange={val => setForm(f => ({ ...f, marcaId: val, productoId: '' }))}
         />
 
+        {/* Producto */}
         <label className="block text-sm font-medium mb-1">Seleccione Producto</label>
         <Dropdown
           options={productos
-            .filter(p=>!form.marcaId || p.marcasIds.includes(form.marcaId))
-            .map(p=>({value:p.id,label:p.label}))}
+            .filter(p => !form.marcaId || p.marcasIds.includes(form.marcaId))
+            .map(p => ({ value: p.id, label: p.label }))}
           value={form.productoId}
-          onChange={val=>setForm(f=>({...f,productoId:val}))}
+          onChange={val => setForm(f => ({ ...f, productoId: val }))}
           disabled={!form.marcaId}
         />
 
+        {/* Lote */}
         <div>
           <label className="block text-sm font-medium mb-1">Lote (5 dígitos)</label>
           <input
@@ -234,25 +258,43 @@ export default function LabelerForm() {
             pattern="\d{5}"
             placeholder="#####"
             value={form.lote}
-            onChange={e=>setForm(f=>({...f,lote:e.target.value.replace(/\D/g,'').slice(0,5)}))}
+            onChange={e =>
+              setForm(f => ({
+                ...f,
+                lote: e.target.value.replace(/\D/g, '').slice(0, 5),
+              }))
+            }
             className={`mt-1 block w-full rounded-xl border px-3 py-2 ${
-              form.lote.length===5?'border-neutral-200':'border-red-500'
+              form.lote.length === 5 ? 'border-neutral-200' : 'border-red-500'
             } focus:ring focus:ring-brand`}
           />
         </div>
 
+        {/* Fechas */}
         <div className="grid grid-cols-2 gap-4">
-          <input type="date" name="fechaFab" value={form.fechaFab} onChange={handleChange}
-            className="mt-1 block w-full rounded-xl border border-neutral-200 px-3 py-2"/>
-          <input type="date" name="fechaVto" value={form.fechaVto} onChange={handleChange}
-            className="mt-1 block w-full rounded-xl border border-neutral-200 px-3 py-2"/>
+          <input
+            type="date"
+            name="fechaFab"
+            value={form.fechaFab}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-xl border border-neutral-200 px-3 py-2"
+          />
+          <input
+            type="date"
+            name="fechaVto"
+            value={form.fechaVto}
+            onChange={handleChange}
+            className="mt-1 block w-full rounded-xl border border-neutral-200 px-3 py-2"
+          />
         </div>
 
+        {/* Conexión báscula */}
         <div className="flex gap-4 justify-center">
           <Button onClick={handleConnectScale}>Conectar Báscula</Button>
           <Button onClick={handleConnectBT}>Báscula BT</Button>
         </div>
 
+        {/* Peso grande */}
         <div className="text-center text-3xl font-semibold tracking-wide">
           {form.peso} g
         </div>
@@ -262,25 +304,38 @@ export default function LabelerForm() {
 
       <Toast visible={toast.visible} message={toast.message} />
 
-      {/* Modal “no printer” */}
+      {/* Modal: no printer → pedir contraseña para modo emergencia */}
       <ConfirmPrint
         open={noPrinterOpen}
-        offline={false}
         data={lastPrint}
-        onKeep={()=>window.location.reload()}     // recarga para volver a intentar
-        onReset={()=>setOfflineMode(true)        // activa modo emergencia
-      }/>
+        onKeep={() => {
+          setNoPrinterOpen(false);
+          window.location.reload();
+        }}
+        onReset={() => {
+          const pwd = window.prompt(
+            '🚨 MODO EMERGENCIA 🚨\n\nIngrese contraseña:'
+          );
+          if (pwd === SECRET) {
+            setOfflineMode(true);
+            setNoPrinterOpen(false);
+            setToast({ visible: true, message: 'Modo emergencia activado' });
+            setTimeout(() => setToast({ visible: false, message: '' }), 3000);
+          } else {
+            alert('❌ Contraseña incorrecta');
+          }
+        }}
+      />
 
-      {/* Modal “mantener / nueva config” */}
+      {/* Modal: mantener o nueva configuración */}
       <ConfirmPrint
         open={confirmOpen}
-        offline={offlineMode}
         data={lastPrint}
-        onKeep={()=>{
+        onKeep={() => {
           setConfirmOpen(false);
-          setForm(f=>({...f,peso:0}));
+          setForm(f => ({ ...f, peso: 0 }));
         }}
-        onReset={()=>window.location.reload()}
+        onReset={() => window.location.reload()}
       />
     </>
   );
