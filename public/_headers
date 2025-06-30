@@ -1,2 +1,28 @@
 /*
-  Content-Security-Policy: default-src 'self'; script-src 'self' http://localhost:9100; connect-src 'self' http://localhost:9100; style-src 'self' 'unsafe-inline'; media-src http: file:;
+  # Política de Seguridad de Contenido (CSP) para Netlify
+
+  # Orígenes generales: tu dominio y el CDN de logo
+  default-src 'self' https://storange.liberecohelados.com.ar;
+
+  # Scripts: tu dominio, localhost para BrowserPrint y Google Fonts
+  script-src 'self'
+             http://localhost:9100
+             https://fonts.googleapis.com;
+
+  # Conexiones XHR/fetch: tu dominio, localhost y Airtable API
+  connect-src 'self'
+              http://localhost:9100
+              https://api.airtable.com;
+
+  # Estilos: tu dominio, inline (Tailwind) y Google Fonts
+  style-src 'self'
+            'unsafe-inline'
+            https://fonts.googleapis.com;
+
+  # Imágenes: tu dominio, data: para SVG inline y el CDN del logo
+  img-src 'self'
+          data:
+          https://storange.liberecohelados.com.ar;
+
+  # Media: si llegas a usar video/audio
+  media-src 'self' http: file:;
