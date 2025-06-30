@@ -1,0 +1,2 @@
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self' http://localhost:9100; connect-src 'self' http://localhost:9100; style-src 'self' 'unsafe-inline'; media-src http: file:;
