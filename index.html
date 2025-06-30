@@ -5,17 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Generador de Etiquetas</title>
 
-  <!-- Permitir scripts y conexiones a localhost:9100 -->
-  <meta http-equiv="Content-Security-Policy"
-        content="
-          default-src 'self';
-          script-src 'self' http://localhost:9100;
-          connect-src 'self' http://localhost:9100;
-          style-src 'self' 'unsafe-inline';
-          media-src http: file:;
-        "
-  />
-
   <!-- Montserrat -->
   <link
     href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap"
@@ -23,9 +12,11 @@
   />
 
   <!-- Zebra BrowserPrint (core + módulo Zebra) -->
-  <script src="http://localhost:9100/BrowserPrint-3.1.250.min.js" data-vite-ignore></script>
-  <script src="http://localhost:9100/BrowserPrint-Zebra-1.1.250.min.js" data-vite-ignore></script>
+  <!-- data-vite-ignore evita que Vite lo incluya en el bundle -->
+  <script src="/BrowserPrint-3.1.250.min.js" data-vite-ignore></script>
+  <script src="/BrowserPrint-Zebra-1.1.250.min.js" data-vite-ignore></script>
 </head>
+
 <body class="font-sans bg-neutral-100">
   <img
     src="https://storange.liberecohelados.com.ar/Logos/Libereco%20logo%20svg%20rojo%20negro.svg"
